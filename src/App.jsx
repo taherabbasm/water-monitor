@@ -1,35 +1,90 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+// src/App.jsx
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import Login from "./pages/Login.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import { account } from "./lib/appwrite.js";
 
 function App() {
-  const [count, setCount] = useState(0)
+  console.log("App component rendered");
+  const [user, setUser] = useState(null);          // null = not logged in
+  const [isCheckingSession, setIsCheckingSession] = useState(true); // loading flag
+
+  // Check if user is already logged in when app loads
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const current = await account.get(); // throws if no session
+        setUser(current);
+      } catch (err) {
+        setUser(null);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+
+    checkSession();
+  }, []);
+
+  // Called from Login.jsx
+  const handleLogin = async (email, password) => {
+    // Create a session
+    await account.createEmailPasswordSession(email, password);
+    // Fetch user info
+    const current = await account.get();
+    setUser(current);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await account.deleteSession("current");
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
+    setUser(null);
+  };
+
+  // While we’re checking existing session
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <p className="text-slate-600 text-sm">Checking session...</p>
+      </div>
+    );
+  }
+
+  const isLoggedIn = !!user;
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <Routes>
+      {/* Login page */}
+      <Route
+        path="/login"
+        element={
+          isLoggedIn ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <Login onLogin={handleLogin} />
+          )
+        }
+      />
+
+      {/* Dashboard page */}
+      <Route
+        path="/dashboard"
+        element={
+          isLoggedIn ? (
+            <Dashboard onLogout={handleLogout} user={user} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      {/* Default route */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
 }
 
-export default App
+export default App;
